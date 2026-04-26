@@ -61,11 +61,29 @@ OPENROUTER_MODEL=meta-llama/llama-3-8b-instruct
 
 ### 4. Configurar Supabase
 
+#### ⚠️ Permitir localhost (IMPORTANTE para claves `sb_publishable_`)
+
+Si tus claves tienen formato `sb_publishable_` y `sb_secret_`:
+
+1. **Supabase Dashboard → Settings → API**
+2. Busca **"Allowed Hostnames"** (o "CORS")
+3. Añade:
+   ```
+   localhost:3000
+   localhost
+   127.0.0.1:3000
+   ```
+4. Haz clic en **Save**
+
+> Ver [SETUP_SUPABASE.md](./SETUP_SUPABASE.md) para guía visual completa.
+
 #### Crear las tablas
 
 1. Ve a tu proyecto en [supabase.com](https://supabase.com)
 2. Abre **SQL Editor**
-3. Copia y ejecuta el contenido de `supabase/schema.sql`
+3. Copia todo el contenido de `supabase/schema.sql`
+4. Pégalo y ejecuta (botón ▶)
+5. Espera a que termine con "Success"
 
 #### Crear el bucket de Storage
 
