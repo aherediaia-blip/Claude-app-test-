@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
   {
@@ -48,6 +50,27 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const supabase = createClient()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setUserEmail(session?.user?.email ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [supabase])
+
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <aside
@@ -55,15 +78,9 @@ export default function Sidebar() {
       className="w-64 min-h-screen flex flex-col"
     >
       {/* Logo */}
-      <div
-        style={{ borderBottom: '1px solid #2a2d3e' }}
-        className="px-6 py-5"
-      >
+      <div style={{ borderBottom: '1px solid #2a2d3e' }} className="px-6 py-5">
         <div className="flex items-center gap-3">
-          <div
-            style={{ backgroundColor: '#3b82f6' }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-          >
+          <div style={{ backgroundColor: '#3b82f6' }} className="w-8 h-8 rounded-lg flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
@@ -98,12 +115,42 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div style={{ borderTop: '1px solid #2a2d3e' }} className="px-6 py-4">
-        <div style={{ color: '#64748b' }} className="text-xs">
-          <div className="font-medium mb-1">FactoryBrain AI v0.1</div>
-          <div>Copiloto Industrial para PyMEs</div>
-        </div>
+      {/* Usuario + logout */}
+      <div style={{ borderTop: '1px solid #2a2d3e' }} className="px-4 py-4">
+        {userEmail && (
+          <div
+            style={{ backgroundColor: '#141622', border: '1px solid #2a2d3e' }}
+            className="rounded-lg p-3 mb-3"
+          >
+            <div className="flex items-center gap-2.5">
+              <div
+                style={{ backgroundColor: '#3b82f620', color: '#3b82f6' }}
+                className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
+              >
+                {userEmail[0].toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div style={{ color: '#e2e8f0' }} className="text-xs font-medium truncate">{userEmail}</div>
+                <div style={{ color: '#64748b' }} className="text-xs">Sesión activa</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          style={{ color: '#64748b', width: '100%' }}
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs hover:text-white hover:bg-white/5 transition-all disabled:opacity-50"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          {loggingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
+        </button>
+
+        <div style={{ color: '#2a2d3e' }} className="text-xs px-3 pt-3">FactoryBrain AI v0.1</div>
       </div>
     </aside>
   )

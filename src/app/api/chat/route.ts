@@ -20,7 +20,7 @@ Reglas de comportamiento:
 2. Sé claro, riguroso y profesional en cada respuesta
 3. NO inventes datos, cifras ni información que no esté en el contexto
 4. Si no tienes datos suficientes para responder con precisión, indícalo explícitamente
-5. Cuando uses información de documentos proporcionados, indícalo claramente con "Según el documento adjunto:"
+5. Cuando uses información de documentos proporcionados, indícalo con "Según el documento adjunto:"
 6. Estructura tus respuestas con títulos (##) y listas cuando mejore la legibilidad
 7. Cuando hagas cálculos, muestra los pasos intermedios
 8. Si detectas inconsistencias en los datos, señálalas proactivamente`
@@ -29,6 +29,12 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
     return NextResponse.json({ error: 'OPENROUTER_API_KEY no configurada' }, { status: 500 })
+  }
+
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
 
   const body = await req.json()
@@ -43,13 +49,12 @@ export async function POST(req: NextRequest) {
 
   let systemPrompt = SYSTEM_PROMPT
 
-  // Si se proporciona documentId, recuperar el texto del documento
   if (documentId) {
-    const supabase = createServerClient()
     const { data: doc, error } = await supabase
       .from('documents')
       .select('name, extracted_text, file_type')
       .eq('id', documentId)
+      .eq('user_id', user.id)
       .single()
 
     if (!error && doc?.extracted_text) {
@@ -62,11 +67,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const openRouterMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages,
-  ]
-
   const response = await fetch(OPENROUTER_BASE_URL, {
     method: 'POST',
     headers: {
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model: OPENROUTER_MODEL,
-      messages: openRouterMessages,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature: 0.3,
       max_tokens: 2048,
     }),
@@ -85,10 +85,7 @@ export async function POST(req: NextRequest) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    return NextResponse.json(
-      { error: `Error de OpenRouter: ${response.status} - ${errorText}` },
-      { status: response.status }
-    )
+    return NextResponse.json({ error: `Error de OpenRouter: ${response.status} - ${errorText}` }, { status: response.status })
   }
 
   const data = await response.json()

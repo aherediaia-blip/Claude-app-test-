@@ -43,6 +43,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'OPENROUTER_API_KEY no configurada' }, { status: 500 })
   }
 
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  }
+
   const body = await req.json()
   const { reportType, documentId, title } = body as {
     reportType: 'financiero' | 'tecnico' | 'auditoria' | 'produccion'
@@ -54,14 +60,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Tipo de informe no válido' }, { status: 400 })
   }
 
-  const supabase = createServerClient()
-
   let docContext = ''
   if (documentId) {
     const { data: doc } = await supabase
       .from('documents')
       .select('name, extracted_text, file_type')
       .eq('id', documentId)
+      .eq('user_id', user.id)
       .single()
 
     if (doc?.extracted_text) {
@@ -69,7 +74,6 @@ export async function POST(req: NextRequest) {
       const truncated = doc.extracted_text.length > maxChars
         ? doc.extracted_text.slice(0, maxChars) + '\n[...truncado...]'
         : doc.extracted_text
-
       docContext = `\n\nDOCUMENTO BASE: "${doc.name}"\n\nCONTENIDO:\n${truncated}`
     }
   }
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
 Genera informes profesionales, rigurosos y estructurados en español de España.
 No inventes datos. Si no hay información suficiente, indícalo claramente en cada sección.`
 
-  const userMessage = REPORT_PROMPTS[reportType] + (docContext ? docContext : '\n\nGenera el informe de forma genérica dado que no se ha proporcionado un documento base.')
+  const userMessage = REPORT_PROMPTS[reportType] + (docContext || '\n\nGenera el informe de forma genérica dado que no se ha proporcionado documento base.')
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -112,6 +116,7 @@ No inventes datos. Si no hay información suficiente, indícalo claramente en ca
   const { data: savedReport, error: saveError } = await supabase
     .from('reports')
     .insert({
+      user_id: user.id,
       title: reportTitle,
       report_type: reportType,
       content,
@@ -121,7 +126,6 @@ No inventes datos. Si no hay información suficiente, indícalo claramente en ca
     .single()
 
   if (saveError) {
-    // Si falla el guardado, igual devolvemos el contenido
     return NextResponse.json({ content, title: reportTitle, saved: false })
   }
 
@@ -129,10 +133,16 @@ No inventes datos. Si no hay información suficiente, indícalo claramente en ca
 }
 
 export async function GET() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  }
+
   const { data, error } = await supabase
     .from('reports')
     .select('*')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
 
