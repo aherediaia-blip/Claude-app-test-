@@ -12,7 +12,7 @@ Plataforma web que permite subir documentos, analizarlos con inteligencia artifi
 - **React 19** + TypeScript
 - **Tailwind CSS v4**
 - **Supabase** (base de datos + storage)
-- **OpenRouter API** (modelos de IA, por defecto `openai/gpt-4o-mini`)
+- **OpenRouter API** (modelos de IA, por defecto `meta-llama/llama-3-8b-instruct` - GRATUITO)
 - **pdf-parse**, **mammoth**, **xlsx** para extracción de texto documental
 
 ---
@@ -56,7 +56,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
 SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
 OPENROUTER_API_KEY=tu-api-key-de-openrouter
-OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_MODEL=meta-llama/llama-3-8b-instruct
 ```
 
 ### 4. Configurar Supabase
@@ -93,9 +93,25 @@ Abre [http://localhost:3000](http://localhost:3000)
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Sí | Clave pública anon de Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Sí | Clave privada de servicio (solo servidor) |
 | `OPENROUTER_API_KEY` | Sí | API key de OpenRouter |
-| `OPENROUTER_MODEL` | No | Modelo a usar (default: `openai/gpt-4o-mini`) |
+| `OPENROUTER_MODEL` | No | Modelo a usar (default: `meta-llama/llama-3-8b-instruct` - GRATUITO) |
 
 > **Seguridad:** `SUPABASE_SERVICE_ROLE_KEY` y `OPENROUTER_API_KEY` nunca se exponen al cliente. Solo se usan en API routes de servidor.
+
+### Modelos gratuitos disponibles en OpenRouter
+
+Por defecto se usa `meta-llama/llama-3-8b-instruct` (gratuito). Otras opciones:
+
+| Modelo | Gratuito | Velocidad | Calidad |
+|---|---|---|---|
+| `meta-llama/llama-3-8b-instruct` | ✅ | Rápido | Bueno |
+| `mistralai/mistral-7b-instruct` | ✅ | Muy rápido | Bueno |
+| `meta-llama/llama-2-7b-chat` | ✅ | Rápido | Aceptable |
+| `openai/gpt-4o-mini` | ❌ | Rápido | Excelente (pago) |
+
+Para cambiar, edita `.env.local`:
+```env
+OPENROUTER_MODEL=mistralai/mistral-7b-instruct
+```
 
 ---
 
