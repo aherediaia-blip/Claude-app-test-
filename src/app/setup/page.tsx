@@ -1,67 +1,49 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
+
+interface HealthStatus {
+  status: string
+  localMode: boolean
+  checks: {
+    supabase: boolean
+    openrouter: boolean
+    supabaseUrl: string
+    openrouterKey: string
+  }
+  message: string
+  fixes: {
+    supabase: string | null
+    openrouter: string | null
+  }
+}
 
 export default function SetupPage() {
-  const [step, setStep] = useState<'check' | 'configure' | 'done'>('check')
-  const [checking, setChecking] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<{ tables: boolean; bucket: boolean }>({
-    tables: false,
-    bucket: false,
-  })
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    checkSetup()
-  }, [])
-
-  const checkSetup = async () => {
+  const check = async () => {
+    setLoading(true)
     try {
       const res = await fetch('/api/health')
       const data = await res.json()
-
-      if (data.status === 'ok') {
-        setStatus({ tables: true, bucket: true })
-        setStep('done')
-        setChecking(false)
-      } else {
-        setError(data.message)
-        setStep('configure')
-        setChecking(false)
-      }
+      setHealth(data)
     } catch (err) {
-      setError((err as Error).message)
-      setStep('configure')
-      setChecking(false)
-    }
-  }
-
-  const handleConfigureSupabase = async () => {
-    setChecking(true)
-    try {
-      // Intenta ejecutar setup SQL
-      const res = await fetch('/api/setup-sql', { method: 'POST' })
-      const data = await res.json()
-
-      if (data.success) {
-        setStatus({ tables: true, bucket: true })
-        setStep('done')
-      } else {
-        setError(data.message)
-      }
-    } catch (err) {
-      setError((err as Error).message)
+      setHealth(null)
     } finally {
-      setChecking(false)
+      setLoading(false)
     }
   }
+
+  useEffect(() => { check() }, [])
+
+  const allOk = health?.checks.supabase && health?.checks.openrouter
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4"
-      style={{ backgroundColor: '#0f1117' }}
-    >
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: '#0f1117' }}>
+      <div className="w-full max-w-lg">
+
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
@@ -72,154 +54,181 @@ export default function SetupPage() {
               </svg>
             </div>
             <div className="text-left">
-              <div style={{ color: '#e2e8f0' }} className="font-bold text-lg leading-tight">FactoryBrain</div>
-              <div style={{ color: '#3b82f6' }} className="text-sm font-semibold">AI</div>
+              <div style={{ color: '#e2e8f0' }} className="font-bold text-lg">FactoryBrain AI</div>
+              <div style={{ color: '#64748b' }} className="text-xs">Estado del sistema</div>
             </div>
           </div>
-          <h1 style={{ color: '#e2e8f0' }} className="text-2xl font-bold">Configuración inicial</h1>
-          <p style={{ color: '#64748b' }} className="text-sm mt-2">Inicializando tu copiloto industrial</p>
         </div>
 
-        {/* Card */}
-        <div style={{ backgroundColor: '#1e2130', border: '1px solid #2a2d3e' }} className="rounded-2xl p-8">
-          {/* Paso 1: Check */}
-          {step === 'check' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center mb-6">
-                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-              <p style={{ color: '#94a3b8' }} className="text-sm text-center">
-                Verificando configuración de Supabase...
-              </p>
-            </div>
-          )}
+        {loading ? (
+          <div style={{ backgroundColor: '#1e2130', border: '1px solid #2a2d3e' }} className="rounded-2xl p-8 text-center">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p style={{ color: '#64748b' }} className="text-sm">Comprobando servicios...</p>
+          </div>
+        ) : (
+          <div style={{ backgroundColor: '#1e2130', border: '1px solid #2a2d3e' }} className="rounded-2xl overflow-hidden">
 
-          {/* Paso 2: Configurar */}
-          {step === 'configure' && (
-            <div className="space-y-5">
-              <div>
-                <h2 style={{ color: '#e2e8f0' }} className="font-semibold text-base mb-3">Estado</h2>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    {status.bucket ? (
-                      <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="2" />
-                      </svg>
-                    )}
-                    <span style={{ color: '#94a3b8' }} className="text-sm">
-                      {status.bucket ? '✅ Storage bucket' : '⚠️ Storage bucket'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {status.tables ? (
-                      <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                      </svg>
-                    )}
-                    <span style={{ color: '#94a3b8' }} className="text-sm">
-                      {status.tables ? '✅ Tablas de base de datos' : '❌ Tablas de base de datos'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {error && (
+            {/* Estado global */}
+            <div
+              style={{
+                backgroundColor: allOk ? '#10b98115' : health?.localMode ? '#f59e0b15' : '#ef444415',
+                borderBottom: `1px solid ${allOk ? '#10b98130' : health?.localMode ? '#f59e0b30' : '#ef444430'}`,
+              }}
+              className="px-6 py-4"
+            >
+              <div className="flex items-center gap-3">
                 <div
-                  style={{ backgroundColor: '#ef444415', border: '1px solid #ef444440', color: '#ef4444' }}
-                  className="rounded-lg px-4 py-3 text-sm"
+                  style={{ color: allOk ? '#10b981' : health?.localMode ? '#f59e0b' : '#ef4444' }}
+                  className="text-xl"
                 >
-                  {error}
+                  {allOk ? '✅' : health?.localMode ? '⚠️' : '❌'}
                 </div>
-              )}
-
-              <div style={{ backgroundColor: '#141622', border: '1px solid #2a2d3e' }} className="rounded-lg p-4">
-                <p style={{ color: '#94a3b8' }} className="text-xs mb-3">
-                  <strong style={{ color: '#e2e8f0' }}>Falta configurar:</strong>
-                </p>
-                <ol style={{ color: '#64748b' }} className="text-xs space-y-2 list-decimal list-inside">
-                  <li>Permitir localhost en Supabase</li>
-                  <li>Crear las tablas SQL</li>
-                </ol>
+                <div>
+                  <div style={{ color: '#e2e8f0' }} className="font-semibold text-sm">
+                    {allOk ? 'Todo funcionando' : health?.localMode ? 'Modo local activo' : 'Configuración pendiente'}
+                  </div>
+                  <div style={{ color: '#94a3b8' }} className="text-xs mt-0.5">{health?.message}</div>
+                </div>
               </div>
+            </div>
 
+            {/* Servicios */}
+            <div className="px-6 py-5 space-y-3">
+              <h3 style={{ color: '#94a3b8' }} className="text-xs font-medium uppercase tracking-wider mb-4">Servicios</h3>
+
+              {[
+                {
+                  name: 'Supabase (base de datos)',
+                  ok: health?.checks.supabase,
+                  fix: health?.fixes.supabase,
+                  link: 'https://supabase.com/dashboard/project/vbyjqtxqzecqyedikkms/settings/api',
+                  linkLabel: 'Abrir Settings → API',
+                },
+                {
+                  name: 'OpenRouter (IA)',
+                  ok: health?.checks.openrouter,
+                  fix: health?.fixes.openrouter,
+                  link: 'https://openrouter.ai/settings/keys',
+                  linkLabel: 'Abrir OpenRouter Settings',
+                },
+              ].map((service) => (
+                <div
+                  key={service.name}
+                  style={{
+                    backgroundColor: '#141622',
+                    border: `1px solid ${service.ok ? '#10b98130' : '#ef444430'}`,
+                  }}
+                  className="rounded-xl p-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span style={{ color: service.ok ? '#10b981' : '#ef4444' }}>
+                        {service.ok ? '●' : '●'}
+                      </span>
+                      <span style={{ color: '#e2e8f0' }} className="text-sm font-medium">{service.name}</span>
+                    </div>
+                    <span
+                      style={{
+                        backgroundColor: service.ok ? '#10b98120' : '#ef444420',
+                        color: service.ok ? '#10b981' : '#ef4444',
+                      }}
+                      className="text-xs px-2 py-0.5 rounded-full"
+                    >
+                      {service.ok ? 'Conectado' : 'No conectado'}
+                    </span>
+                  </div>
+                  {!service.ok && service.fix && (
+                    <div className="mt-2">
+                      <p style={{ color: '#f59e0b' }} className="text-xs mb-2">🔧 {service.fix}</p>
+                      <a
+                        href={service.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#3b82f6' }}
+                        className="text-xs hover:underline flex items-center gap-1"
+                      >
+                        {service.linkLabel} →
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Qué funciona ahora */}
+            <div style={{ borderTop: '1px solid #2a2d3e' }} className="px-6 py-5">
+              <h3 style={{ color: '#94a3b8' }} className="text-xs font-medium uppercase tracking-wider mb-3">
+                Qué funciona ahora
+              </h3>
+              <div className="space-y-2">
+                {[
+                  { label: 'Dashboard e interfaz', ok: true },
+                  { label: 'Subida y listado de documentos', ok: true },
+                  { label: 'Extracción de texto (PDF, DOCX, XLSX)', ok: true },
+                  { label: 'Chat IA con OpenRouter', ok: health?.checks.openrouter },
+                  { label: 'Informes automáticos con IA', ok: health?.checks.openrouter },
+                  { label: 'Persistencia de datos (Supabase)', ok: health?.checks.supabase && !health?.localMode },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-2">
+                    <span style={{ color: item.ok ? '#10b981' : '#ef4444' }} className="text-sm">
+                      {item.ok ? '✓' : '✗'}
+                    </span>
+                    <span style={{ color: item.ok ? '#94a3b8' : '#64748b' }} className="text-sm">
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Acciones */}
+            <div style={{ borderTop: '1px solid #2a2d3e' }} className="px-6 py-5 flex gap-3">
               <button
-                onClick={handleConfigureSupabase}
-                disabled={checking}
-                style={{ backgroundColor: checking ? '#2a2d3e' : '#3b82f6', width: '100%' }}
-                className="rounded-xl py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:cursor-not-allowed"
+                onClick={check}
+                style={{ backgroundColor: '#2a2d3e', color: '#94a3b8', flex: 1 }}
+                className="rounded-xl py-2.5 text-sm font-medium hover:text-white transition-colors flex items-center justify-center gap-2"
               >
-                {checking ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Configurando...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Completar setup
-                  </>
-                )}
-              </button>
-
-              <details className="text-xs" style={{ color: '#64748b' }}>
-                <summary className="cursor-pointer hover:text-white transition-colors">
-                  ¿Qué hace este botón?
-                </summary>
-                <div style={{ color: '#94a3b8' }} className="mt-3 p-3 rounded bg-white/5 space-y-2">
-                  <p>1. Intenta crear las tablas de base de datos</p>
-                  <p>2. Configura Row Level Security (RLS)</p>
-                  <p>3. Crea políticas de seguridad</p>
-                  <p className="text-xs" style={{ color: '#64748b' }}>
-                    Si falla: necesitas ejecutar manualmente <code>supabase/schema.sql</code> en Supabase SQL Editor
-                  </p>
-                </div>
-              </details>
-            </div>
-          )}
-
-          {/* Paso 3: Done */}
-          {step === 'done' && (
-            <div className="space-y-5 text-center">
-              <div
-                style={{ backgroundColor: '#10b98120', color: '#10b981' }}
-                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto"
-              >
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-              </div>
-
-              <div>
-                <h2 style={{ color: '#e2e8f0' }} className="font-semibold text-lg mb-1">¡Listo!</h2>
-                <p style={{ color: '#94a3b8' }} className="text-sm">
-                  FactoryBrain AI está completamente configurado
-                </p>
-              </div>
-
-              <a
+                Recomprobar
+              </button>
+              <Link
                 href="/"
-                style={{ backgroundColor: '#3b82f6', width: '100%' }}
-                className="inline-block rounded-xl py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: '#3b82f6', flex: 1 }}
+                className="rounded-xl py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
               >
-                Ir al Dashboard
-              </a>
+                Ir al Dashboard →
+              </Link>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Instrucciones rápidas */}
+        {health && !health.checks.openrouter && (
+          <div
+            style={{ backgroundColor: '#1e2130', border: '1px solid #2a2d3e' }}
+            className="rounded-xl mt-4 p-5"
+          >
+            <h3 style={{ color: '#e2e8f0' }} className="font-semibold text-sm mb-3">
+              Para activar el Chat IA (OpenRouter)
+            </h3>
+            <ol style={{ color: '#94a3b8' }} className="text-sm space-y-2 list-decimal list-inside">
+              <li>
+                Ve a{' '}
+                <a href="https://openrouter.ai/settings/keys" target="_blank" style={{ color: '#3b82f6' }} className="hover:underline">
+                  openrouter.ai/settings/keys
+                </a>
+              </li>
+              <li>Haz clic en tu API key activa</li>
+              <li>Busca &ldquo;Allowed domains&rdquo; o &ldquo;Allowed origins&rdquo;</li>
+              <li>Borra los dominios existentes <strong style={{ color: '#e2e8f0' }}>(o deja en blanco = sin restricción)</strong></li>
+              <li>Guarda cambios</li>
+              <li>Pulsa &ldquo;Recomprobar&rdquo; aquí</li>
+            </ol>
+          </div>
+        )}
       </div>
     </div>
   )

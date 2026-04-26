@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
+import { localStore } from '@/lib/local-store'
 
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3-8b-instruct'
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions'
+const LOCAL_MODE = process.env.SUPABASE_LOCAL_MODE === 'true' ||
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project')
+
+const DEMO_USER_ID = 'demo-user-id'
 
 const SYSTEM_PROMPT = `Eres FactoryBrain AI, un analista industrial experto al servicio de PyMEs de fabricación técnica española.
 
@@ -15,26 +20,20 @@ Tu especialización cubre:
 - Documentación técnica y normativa industrial
 - Inversión, financiación y viabilidad de proyectos industriales
 
-Reglas de comportamiento:
-1. Responde SIEMPRE en español de España, usando terminología técnica precisa
-2. Sé claro, riguroso y profesional en cada respuesta
-3. NO inventes datos, cifras ni información que no esté en el contexto
-4. Si no tienes datos suficientes para responder con precisión, indícalo explícitamente
-5. Cuando uses información de documentos proporcionados, indícalo con "Según el documento adjunto:"
-6. Estructura tus respuestas con títulos (##) y listas cuando mejore la legibilidad
-7. Cuando hagas cálculos, muestra los pasos intermedios
-8. Si detectas inconsistencias en los datos, señálalas proactivamente`
+Reglas:
+1. Responde SIEMPRE en español de España con terminología técnica precisa
+2. Sé claro, riguroso y profesional
+3. NO inventes datos ni cifras que no estén en el contexto
+4. Si no tienes datos suficientes, indícalo explícitamente
+5. Cuando uses información de documentos, indícalo con "Según el documento adjunto:"
+6. Estructura las respuestas con títulos (##) y listas cuando mejore la legibilidad
+7. Muestra pasos intermedios en cálculos
+8. Señala proactivamente inconsistencias en los datos`
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
-    return NextResponse.json({ error: 'OPENROUTER_API_KEY no configurada' }, { status: 500 })
-  }
-
-  const supabase = await createServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    return NextResponse.json({ error: 'OPENROUTER_API_KEY no configurada en .env.local' }, { status: 500 })
   }
 
   const body = await req.json()
@@ -43,31 +42,46 @@ export async function POST(req: NextRequest) {
     documentId?: string
   }
 
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+  if (!messages?.length) {
     return NextResponse.json({ error: 'Se requieren mensajes' }, { status: 400 })
   }
 
   let systemPrompt = SYSTEM_PROMPT
 
+  // Obtener contexto documental
   if (documentId) {
-    const { data: doc, error } = await supabase
-      .from('documents')
-      .select('name, extracted_text, file_type')
-      .eq('id', documentId)
-      .eq('user_id', user.id)
-      .single()
+    let doc = null
 
-    if (!error && doc?.extracted_text) {
+    if (LOCAL_MODE) {
+      doc = localStore.documents.getById(documentId, DEMO_USER_ID)
+    } else {
+      try {
+        const supabase = await createServerClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase
+            .from('documents')
+            .select('name, extracted_text, file_type')
+            .eq('id', documentId)
+            .eq('user_id', user.id)
+            .single()
+          doc = data
+        }
+      } catch {
+        doc = localStore.documents.getById(documentId, DEMO_USER_ID)
+      }
+    }
+
+    if (doc?.extracted_text) {
       const maxChars = 12000
       const truncated = doc.extracted_text.length > maxChars
         ? doc.extracted_text.slice(0, maxChars) + '\n\n[... documento truncado por longitud ...]'
         : doc.extracted_text
-
       systemPrompt += `\n\n---\nDOCUMENTO ADJUNTO: "${doc.name}" (${doc.file_type})\n\nCONTENIDO:\n${truncated}\n---`
     }
   }
 
-  const response = await fetch(OPENROUTER_BASE_URL, {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -85,7 +99,10 @@ export async function POST(req: NextRequest) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    return NextResponse.json({ error: `Error de OpenRouter: ${response.status} - ${errorText}` }, { status: response.status })
+    return NextResponse.json(
+      { error: `Error de OpenRouter (${response.status}): ${errorText}` },
+      { status: response.status }
+    )
   }
 
   const data = await response.json()

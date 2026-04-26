@@ -1,5 +1,6 @@
 export interface Document {
   id: string
+  user_id: string
   name: string
   file_path: string
   file_type: string
@@ -10,6 +11,7 @@ export interface Document {
 
 export interface ChatMessage {
   id: string
+  user_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   document_id: string | null
@@ -18,6 +20,7 @@ export interface ChatMessage {
 
 export interface Report {
   id: string
+  user_id: string
   title: string
   report_type: 'financiero' | 'tecnico' | 'auditoria' | 'produccion'
   content: string

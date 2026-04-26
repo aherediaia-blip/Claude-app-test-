@@ -3,7 +3,29 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/setup']
 
+// Modo local: bypasea auth si Supabase no está configurado
+const LOCAL_MODE =
+  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your-project') ||
+  process.env.SUPABASE_LOCAL_MODE === 'true'
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // Rutas de API: pasar siempre
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next({ request })
+  }
+
+  // En modo local no hay auth — acceso libre a todo
+  if (LOCAL_MODE) {
+    // Redirigir /login y /register al dashboard en modo local
+    if (pathname === '/login' || pathname === '/register') {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -11,9 +33,7 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
@@ -26,22 +46,14 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const pathname = request.nextUrl.pathname
 
   // Rutas públicas: redirigir al dashboard si ya está autenticado
   if (PUBLIC_ROUTES.includes(pathname)) {
-    if (user) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
+    if (user) return NextResponse.redirect(new URL('/', request.url))
     return supabaseResponse
   }
 
-  // Rutas de API: dejar pasar (cada route valida por su cuenta)
-  if (pathname.startsWith('/api/')) {
-    return supabaseResponse
-  }
-
-  // Rutas protegidas: redirigir a login si no está autenticado
+  // Rutas protegidas: redirigir a login si no autenticado
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
